@@ -1,61 +1,89 @@
 from __future__ import annotations
 from pathlib import Path
 import asyncio
-import aionotify
-from aionotify import Flags
+import websockets
+from uuid import UUID
+from watchfiles import awatch
+from typing import Any
+
+import json
 import click
+from aiotools.taskgroup import TaskGroup
+import attrs
 
-DEFAULT_INOTIFY_FLAG = Flags.CREATE | Flags.MODIFY
+@attrs.define
+class Connection:
+    uuid: UUID
+    ws: websockets.ServerProtocol # type: ignore
+    queue: asyncio.Queue = attrs.field(factory=asyncio.Queue)
 
-def watch_targets(base: Path, ignore: set[Path] | None=None) -> set[Path]:
-    # bfs while respecting ignore
-    ret = set()
-    next: list[Path] = [base]
-    while next:
-        _next = []
-        for d in next:
-            for p in d.iterdir():
-                if not p.is_dir():
-                    continue
+    _tasks: set[asyncio.Task] = attrs.field(factory=set)
 
-                if ignore is not None and p in ignore:
-                    continue
+    @classmethod
+    def from_ws(cls, ws):
+        return cls(uuid=ws.id, ws=ws)
 
-                ret.add(p)
-                _next.append(p)
-            
-        next = _next
+    # TODO: change to concrete change type
+    def create_send_task(self, data: str):
+        task = asyncio.create_task(self.ws.send(data))
+        self._tasks.add(task)
+        task.add_done_callback(self._tasks.discard)
 
-    return ret
+def dump_changes(changes: Any):
+    res = []
+    for change, fname in changes:
+        res.append({
+            'change': change.name,
+            'file': fname
+        })
+
+    return json.dumps(res)
 
 
-
+connections: dict[UUID, Connection] = {} # type: ignore
 async def watcher(watchdir: Path, ignore: set[Path] | None):
-    targets = watch_targets(watchdir, ignore)
-    watcher = aionotify.Watcher()
-    for target in targets:
-        print(f"Watch: {target}")
-        watcher.watch(alias=str(target), path=str(target), flags=DEFAULT_INOTIFY_FLAG)
+    # TODO: ignore paths
+    async for changes in awatch(watchdir):
+        data = dump_changes(changes)
+        for conn in connections.values():
+            conn.create_send_task(data)
 
-    loop = asyncio.get_event_loop()
-    await watcher.setup(loop)
-    while True:
-        event = await watcher.get_event()
-        print(event)
+
+async def echo(ws: websockets.ServerProtocol): # type: ignore
+    q = connections[ws.id] = Connection.from_ws(ws)
+    print(f"New connection {ws.id}")
+
+    if ws.id not in connections:
+        print(f'New connection {ws.id}')
+        await ws.send(f"Welcome {ws.id}")
+
+    async for message in ws:
+        await ws.send(message)
+
+    del connections[ws.id]
+    print(f"Disconnected {ws.id}")
+
+async def websocket_server():
+    async with websockets.serve(echo, "localhost", 8765):
+        await asyncio.Future()  # run forever
+
+async def start_all_tasks(watchdir: Path, ignore: set[Path] | None):
+    async with TaskGroup() as tg:
+        tg.create_task(watcher(watchdir, ignore))
+        tg.create_task(websocket_server())
 
 @click.command()
 @click.argument('watchdir', type=click.Path(exists=True, path_type=Path,))
 @click.option('--ignore', multiple=True, type=click.Path(exists=True, path_type=Path,))
 def main(watchdir: Path, ignore: tuple[Path] | None) -> None:
-    print(f'Ignoring {ignore}')
-
     # Cast ignore
     if ignore is not None:
         _ignore = set(ignore)
     else:
         _ignore = None
 
-    asyncio.run(watcher(watchdir, _ignore))
+    asyncio.run(start_all_tasks(watchdir, _ignore))
+
 
 
 if __name__ == '__main__':
