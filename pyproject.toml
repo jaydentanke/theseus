@@ -12,6 +12,7 @@ websockets = "^10.4"
 watchfiles = "^0.18.1"
 aiotools = "^1.5.9"
 attrs = "^22.2.0"
+flask = "^2.2.3"
 
 
 [tool.poetry.group.dev.dependencies]

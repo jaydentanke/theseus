@@ -1,5 +1,6 @@
 from __future__ import annotations
 from pathlib import Path
+import sys
 import asyncio
 import websockets
 from uuid import UUID
@@ -10,6 +11,7 @@ import json
 import click
 from aiotools.taskgroup import TaskGroup
 import attrs
+import subprocess
 
 @attrs.define
 class Connection:
@@ -57,8 +59,7 @@ async def echo(ws: websockets.ServerProtocol): # type: ignore
         print(f'New connection {ws.id}')
         await ws.send(f"Welcome {ws.id}")
 
-    async for message in ws:
-        await ws.send(message)
+    await ws.wait_closed()
 
     del connections[ws.id]
     print(f"Disconnected {ws.id}")
@@ -71,6 +72,7 @@ async def start_all_tasks(watchdir: Path, ignore: set[Path] | None):
     async with TaskGroup() as tg:
         tg.create_task(watcher(watchdir, ignore))
         tg.create_task(websocket_server())
+        tg.create_task(asyncio.create_subprocess_shell(" ".join([sys.executable, '-m', 'http.server', '--bind', '127.0.0.1', '--directory', str(watchdir), '8764'])))
 
 @click.command()
 @click.argument('watchdir', type=click.Path(exists=True, path_type=Path,))
@@ -83,8 +85,6 @@ def main(watchdir: Path, ignore: tuple[Path] | None) -> None:
         _ignore = None
 
     asyncio.run(start_all_tasks(watchdir, _ignore))
-
-
 
 if __name__ == '__main__':
     main()
