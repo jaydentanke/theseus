@@ -72,7 +72,8 @@ async def start_all_tasks(watchdir: Path, ignore: set[Path] | None):
     async with TaskGroup() as tg:
         tg.create_task(watcher(watchdir, ignore))
         tg.create_task(websocket_server())
-        tg.create_task(asyncio.create_subprocess_shell(" ".join([sys.executable, '-m', 'http.server', '--bind', '127.0.0.1', '--directory', str(watchdir), '8764'])))
+        HTTP_SERVER = ['npx', 'serve', str(watchdir), '--cors', '-l', '8764']
+        tg.create_task(asyncio.create_subprocess_shell(" ".join(HTTP_SERVER)))
 
 @click.command()
 @click.argument('watchdir', type=click.Path(exists=True, path_type=Path,))
