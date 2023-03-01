@@ -23,10 +23,13 @@
     "unified": "^10.1.2",
     "vfile": "^5.3.7"
   },
-  "type": "module",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "start:dev": "npx nodemon",
+    "frontend": "cd frontend && npm start",
+    "start": "tmux new-session  'npm run start:dev' \\; split-window 'npm run frontend' \\;"
   },
+  "type": "module",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/jaydentanke/theseus.git"
@@ -36,5 +39,14 @@
   "bugs": {
     "url": "https://github.com/jaydentanke/theseus/issues"
   },
-  "homepage": "https://github.com/jaydentanke/theseus#readme"
+  "homepage": "https://github.com/jaydentanke/theseus#readme",
+  "devDependencies": {
+    "@types/cors": "^2.8.13",
+    "@types/express": "^4.17.17",
+    "@types/express-ws": "^3.0.1",
+    "@types/node": "^18.14.2",
+    "nodemon": "^2.0.20",
+    "ts-node": "^10.9.1",
+    "typescript": "^4.9.5"
+  }
 }

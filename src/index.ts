@@ -70,7 +70,7 @@ app.get(['/page', '/page/*'], async (req, res) => {
         //     console.log(item.heading.properties);
         // }
         res.send(String(file));
-    } catch (err) {
+    } catch (err: any) {
         if (err.code == 'ENOENT') {
             res.sendStatus(404);
             return;
@@ -82,8 +82,8 @@ app.get(['/page', '/page/*'], async (req, res) => {
 
 
 /** File Watch websocket **/
-var changesWs = expressWsInstance.getWss('/changes');
-app.ws('/changes', function (ws, req) {
+var changesWs = expressWsInstance.getWss();
+expressWsInstance.app.ws('/changes', function (ws, req) {
     console.log("Socket Connected")
 })
 chokidar.watch(watchdir, { ignoreInitial: true, cwd: watchdir }).on('all', (event, path) => {
