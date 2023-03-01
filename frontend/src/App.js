@@ -1,62 +1,61 @@
 import logo from './logo.svg';
+import React, { useState, useCallback, useEffect } from 'react';
 import './App.css';
 import {
   createBrowserRouter,
   RouterProvider,
   useLoaderData,
   useParams,
+  useNavigate,
 } from "react-router-dom";
-import ReactMarkdown from 'react-markdown';
 import axios from 'axios';
-import remarkToc from 'remark-toc'
 import 'github-markdown-css/github-markdown-dark.css';
+import useWebSocket from 'react-use-websocket';
 
 
-const PAGE_URL = "http://localhost:8764"
+const PAGE_URL = "http://localhost:4000"
 async function urlLoader({ params }) {
   // console.log(params.mdUrl);
-  const res = await axios.get(`${PAGE_URL}/${params.mdUrl}`);
+  console.log(params)
+  const res = await axios.get(`${PAGE_URL}/page/${params['*']}`);
   // console.log(res);
   return res.data;
 }
 
-
+const socketUrl = "ws://localhost:4000/changes";
 function MarkdownPage(params) {
+  const { sendMessage, lastMessage, readyState } = useWebSocket(socketUrl);
   const md = useLoaderData()
-  return <div style={{height: "100vh", padding: "10px"}} className={"markdown-body"}><ReactMarkdown className={"markdown-body"} remarkPlugins={[remarkToc]}>{md}</ReactMarkdown></div>;
+  const [ _html, setHtml ] = useState(md);
+  const navigate = useNavigate()
+  useEffect(() => {
+    if (lastMessage !== null) {
+      const {event, path} = JSON.parse(lastMessage.data);
+      console.log('Detected change in', event, path);
+      (async () => {
+        const res = await axios.get(`${PAGE_URL}/page/${path}`);
+        setHtml(res.data);
+      })();
+      // console.log(res);
+      navigate(`/page/${path}`)
+    }
+  }, [lastMessage, navigate]);
+
+
+
+
+  return <div style={{ minHeight: "100vh", height: "100%", padding: "10px" }} className={"markdown-body"} dangerouslySetInnerHTML={{ __html: _html }}></div>;
 }
 
 // Websocket
-const ws = new WebSocket("ws://localhost:8765");
-ws.addEventListener('message', function message(event) {
-  console.log('received %s', event.data)
-})
+// const ws = new WebSocket();
+// ws.addEventListener('message', function message(event) {
+//   console.log('received %s', event.data)
+// })
 
 const router = createBrowserRouter([
   {
-    path: "/",
-    element: (
-      <div className="App">
-        <header className="App-header">
-          <img src={logo} className="App-logo" alt="logo" />
-          <p>
-            Edit <code>src/App.js</code> and save to reload.
-          </p>
-          <a
-            className="App-link"
-            href="https://reactjs.org"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Learn React
-          </a>
-        </header>
-      </div>
-
-    )
-  },
-  {
-    path: "/page/:mdUrl",
+    path: "/page/*",
     loader: urlLoader,
     element: <MarkdownPage />
   }
